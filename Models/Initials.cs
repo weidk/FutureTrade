@@ -15,6 +15,7 @@ namespace FutureTrade.Models
         public SqlSugarClient db;
         public HSPack_Syn hsPack;
         public IDatabase rClient;
+        public IDatabase rClientHQ;
         public static Dictionary<string, UserInfo> UserDicts = new Dictionary<string, UserInfo>();
     }
 }

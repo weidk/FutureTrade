@@ -134,6 +134,7 @@
     <Compile Include="Funs.cs" />
     <Compile Include="HSPack_Syn.cs" />
     <Compile Include="Models\ConfigPars.cs" />
+    <Compile Include="Models\FutureInfo.cs" />
     <Compile Include="Models\Initials.cs" />
     <Compile Include="Models\RequestClass.cs" />
     <Compile Include="Models\UserInfo.cs" />

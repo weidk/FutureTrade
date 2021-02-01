@@ -1,4 +1,5 @@
 ﻿using FutureTrade.Models;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
@@ -16,6 +17,7 @@ namespace FutureTrade
 
     public class MQServer
     {
+        public  Dictionary<string, FutureInfo> FutureInfoDict = new Dictionary<string, FutureInfo>();
         public static BlockingCollection<RequestClass> requestQueues = new BlockingCollection<RequestClass>();
         private readonly IConnection connection;
         private readonly IModel channel;
@@ -43,14 +45,20 @@ namespace FutureTrade
 
             channel = connection.CreateModel();
             channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
+
         }
 
 
         public void ClientRequestHandle(Initials Init)
         {
+            FutureInfoDict = Init.rClientHQ.HashGetAll("FutureBasicInfo").ToDictionary(
+                            x => x.Name.ToString(),
+                            x => JsonConvert.DeserializeObject<FutureInfo>(x.Value),
+                            StringComparer.Ordinal);
+
             #region 接收客户端发送来的请求
 
-            
+
             EventingBasicConsumer consumer = new EventingBasicConsumer(channel);
             consumer.Received += (model, ea) =>
             {
@@ -61,7 +69,7 @@ namespace FutureTrade
                 {
                     var message = Encoding.UTF8.GetString(body);
                     Console.WriteLine(message);
-                    RequestClass request  = Newtonsoft.Json.JsonConvert.DeserializeObject<RequestClass>(message);
+                    RequestClass request = Newtonsoft.Json.JsonConvert.DeserializeObject<RequestClass>(message);
 
                     if (request.businessType == "1")  //新增订单
                     {
@@ -71,8 +79,8 @@ namespace FutureTrade
                     {
                         CancldOrder(request);
                     }
-                    
-                    
+
+
                 }
                 catch (Exception e)
                 {
@@ -98,7 +106,7 @@ namespace FutureTrade
                 }
             };
             channel.BasicConsume(queue: workQueueName, autoAck: false, consumer: consumer);
-            
+
             #endregion
 
             // 发送订单
@@ -145,36 +153,31 @@ namespace FutureTrade
 
                 #endregion
 
-                //string userKey = request.queue_name.Split('_')[1];
                 //string userKey = request.queue_name.Split(new string[] { "FutureReply_"}, StringSplitOptions.RemoveEmptyEntries)[1];
                 string userKey = request.queue_name.Replace(Funs.CONFIG.ReplyName, "");
 
+                FutureInfo CodeInfo = new FutureInfo();
+                FutureInfoDict.TryGetValue(request.code,out CodeInfo);
 
-                //if (Initials.UserDicts[userKey].token != null)
-                //{
-                    FutureEntrust_Input objFutrueEntrust_Input = new FutureEntrust_Input();
-                    objFutrueEntrust_Input.in_user_token = Funs.CONFIG.token;
-                    objFutrueEntrust_Input.in_account_code = Initials.UserDicts[userKey].account_code;
-                    objFutrueEntrust_Input.in_asset_no = Initials.UserDicts[userKey].asset_no;
-                    objFutrueEntrust_Input.in_combi_no = Initials.UserDicts[userKey].combi_no;
-                    objFutrueEntrust_Input.in_market_no = "7";
-                    objFutrueEntrust_Input.in_stock_code = request.code;
-                    objFutrueEntrust_Input.in_entrust_direction = request.direction;
-                    objFutrueEntrust_Input.in_futures_direction = request.futures_direction;
-                    objFutrueEntrust_Input.in_price_type = request.priceType;
-                    objFutrueEntrust_Input.in_entrust_price = request.entrust_price;
-                    objFutrueEntrust_Input.in_entrust_amount = request.entrust_amount;
 
-                    var objFutureEntrust_Output = Init.hsPack.Fun91004_FutrueEntrust(objFutrueEntrust_Input);
-                    request.error_info = objFutureEntrust_Output.out_error_info + objFutureEntrust_Output.out_fail_cause;
-                    request.entrust_no = objFutureEntrust_Output.out_entrust_no;
-                    request.entrust_direction = objFutrueEntrust_Input.in_entrust_direction;
-                    request.futures_direction = objFutrueEntrust_Input.in_futures_direction;
-                //}
-                //else
-                //{
-                //    request.error_info = "O32密码错误，请联系管理员更新服务端密码";
-                //}
+                FutureEntrust_Input objFutrueEntrust_Input = new FutureEntrust_Input();
+                objFutrueEntrust_Input.in_user_token = Funs.CONFIG.token;
+                objFutrueEntrust_Input.in_account_code = Initials.UserDicts[userKey].account_code;
+                objFutrueEntrust_Input.in_asset_no = Initials.UserDicts[userKey].asset_no;
+                objFutrueEntrust_Input.in_combi_no = Initials.UserDicts[userKey].combi_no;
+                objFutrueEntrust_Input.in_market_no = CodeInfo.HS_MARKET_CODE;
+                objFutrueEntrust_Input.in_stock_code = request.code;
+                objFutrueEntrust_Input.in_entrust_direction = request.direction;
+                objFutrueEntrust_Input.in_futures_direction = request.futures_direction;
+                objFutrueEntrust_Input.in_price_type = request.priceType;
+                objFutrueEntrust_Input.in_entrust_price = request.entrust_price;
+                objFutrueEntrust_Input.in_entrust_amount = request.entrust_amount;
+
+                var objFutureEntrust_Output = Init.hsPack.Fun91004_FutrueEntrust(objFutrueEntrust_Input);
+                request.error_info = objFutureEntrust_Output.out_error_info + objFutureEntrust_Output.out_fail_cause;
+                request.entrust_no = objFutureEntrust_Output.out_entrust_no;
+                request.entrust_direction = objFutrueEntrust_Input.in_entrust_direction;
+                request.futures_direction = objFutrueEntrust_Input.in_futures_direction;
                 PublishMsg(request, channel, Init);
 
 
@@ -189,22 +192,22 @@ namespace FutureTrade
                 var requestCancle = Funs.DeepCopy<RequestClass>(request);
                 //if (Initials.UserDicts[userKey].token != null)
                 //{
-                    FutureentrustWithdraw_Input objFutureentrustWithdraw_Input = new FutureentrustWithdraw_Input();
-                    objFutureentrustWithdraw_Input.in_user_token = Funs.CONFIG.token;
-                    objFutureentrustWithdraw_Input.in_entrust_no = requestCancle.entrust_no;
-                    objFutureentrustWithdraw_Input.account_code = Initials.UserDicts[userKey].account_code;
-                    objFutureentrustWithdraw_Input.combi_no = Initials.UserDicts[userKey].combi_no;
-                    var objFutureentrustWithdraw_Output = Init.hsPack.Fun91119_FutrueentrustWithdraw(objFutureentrustWithdraw_Input);
-                    requestCancle.error_info = objFutureentrustWithdraw_Output.out_error_info + objFutureentrustWithdraw_Output.out_fail_cause;
-                    requestCancle.entrust_no = objFutureentrustWithdraw_Output.out_entrust_no;
-                    
+                FutureentrustWithdraw_Input objFutureentrustWithdraw_Input = new FutureentrustWithdraw_Input();
+                objFutureentrustWithdraw_Input.in_user_token = Funs.CONFIG.token;
+                objFutureentrustWithdraw_Input.in_entrust_no = requestCancle.entrust_no;
+                objFutureentrustWithdraw_Input.account_code = Initials.UserDicts[userKey].account_code;
+                objFutureentrustWithdraw_Input.combi_no = Initials.UserDicts[userKey].combi_no;
+                var objFutureentrustWithdraw_Output = Init.hsPack.Fun91119_FutrueentrustWithdraw(objFutureentrustWithdraw_Input);
+                requestCancle.error_info = objFutureentrustWithdraw_Output.out_error_info + objFutureentrustWithdraw_Output.out_fail_cause;
+                requestCancle.entrust_no = objFutureentrustWithdraw_Output.out_entrust_no;
+
                 //}
                 //else
                 //{
                 //    requestCancle.error_info = "O32密码错误，请联系管理员更新服务端密码";
                 //}
                 PublishCancle(requestCancle, channel, Init);
-            } 
+            }
         }
 
 
@@ -250,7 +253,7 @@ namespace FutureTrade
 
         }
 
-        
+
 
         public void Close()
         {
@@ -277,7 +280,7 @@ namespace FutureTrade
                             System.Environment.Exit(0);
                         }
 
-                        
+
                         Init.hsPack.Fun10000_heartBeat(Funs.CONFIG.token);
 
                         //foreach (KeyValuePair<string,UserInfo> kv in Initials.UserDicts)
@@ -287,9 +290,9 @@ namespace FutureTrade
                         //        // 发送心跳
                         //        Init.hsPack.Fun10000_heartBeat(kv.Value.token);
                         //    }
-                            
+
                         //}
-                        
+
                     }
                     catch (Exception e)
                     {

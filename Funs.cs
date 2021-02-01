@@ -56,6 +56,9 @@ namespace FutureTrade
             ConnectionMultiplexer redis = ConnectionMultiplexer.Connect(Funs.CONFIG.redis);
             IDatabase rClient = redis.GetDatabase();
 
+            ConnectionMultiplexer redisHQ = ConnectionMultiplexer.Connect(Funs.CONFIG.redisHQ);
+            IDatabase rClientHQ = redisHQ.GetDatabase();
+
             #endregion
             Initials Init = new Initials()
             {
@@ -63,6 +66,7 @@ namespace FutureTrade
                 db = db,
                 hsPack = hsPack,
                 rClient = rClient,
+                rClientHQ = rClientHQ,
             };
             return Init;
 
